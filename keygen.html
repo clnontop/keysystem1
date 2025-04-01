@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Key Generator</title>
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            let referrer = document.referrer;
+            if (!referrer.includes("linkvertise.com")) {
+                window.location.href = "https://google.com"; // Redirect if not from Linkvertise
+            }
+        });
+
+        async function generateKey() {
+            const response = await fetch("http://your-backend-url.com/get-key");
+            const data = await response.json();
+            document.getElementById("keyDisplay").innerText = "Your Key: " + data.key;
+        }
+    </script>
+</head>
+<body>
+    <h1>Welcome to the Key Generator</h1>
+    <button onclick="generateKey()">Generate Key</button>
+    <p id="keyDisplay"></p>
+</body>
+</html>
