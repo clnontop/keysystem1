@@ -6,9 +6,10 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-const keys = new Map(); // Temporary keys storage
-const permanentKeys = new Map(); // Permanent keys storage
+const keys = new Map(); // Temporary storage
+const permanentKeys = new Map(); // Permanent storage
 
+// Define key durations correctly
 const KEY_DURATIONS = {
     "1-week": 7 * 24 * 60 * 60 * 1000,  // 7 days
     "1-month": 30 * 24 * 60 * 60 * 1000, // 30 days
@@ -16,18 +17,17 @@ const KEY_DURATIONS = {
     "one-time": 24 * 60 * 60 * 1000,     // 1 day
     "1-minute": 60 * 1000,               // 1 minute
     "1-second": 1 * 1000,                // 1 second
-    "5-seconds": 5 * 1000,               // 5 seconds
+    "5-seconds": 5 * 1000                // 5 seconds
 };
 
-const UNUSED_EXPIRY = 3 * 60 * 1000; // 3 minutes expiry for unused keys
-const MAX_KEYS = 10; // Max keys per user
+const UNUSED_EXPIRY = 3 * 60 * 1000; // Unused keys expire in 3 minutes
 const ADMIN_SECRET = "BUHUM"; // Change this for security
 
 function generateKey(hwid, keyType) {
-    return `INF-${keyType.slice(0, 1).toUpperCase()}-${hwid.slice(0, 6)}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+    return `INF-${keyType.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()}-${hwid.slice(0, 6)}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
 }
 
-// Generate a key (requires HWID and key type)
+// Generate a key
 app.post('/generate-key', (req, res) => {
     const { hwid, keyType } = req.body;
 
@@ -39,10 +39,6 @@ app.post('/generate-key', (req, res) => {
         return res.status(400).json({ error: 'Invalid key type' });
     }
 
-    if (keys.has(hwid) && keys.get(hwid).some(k => k.keyType === keyType)) {
-        return res.status(400).json({ error: `You already have a ${keyType} key` });
-    }
-
     const key = generateKey(hwid, keyType);
     const now = Date.now();
 
@@ -51,11 +47,11 @@ app.post('/generate-key', (req, res) => {
         return res.json({ key, expiresIn: "Never" });
     }
 
-    const keyData = { key, hwid, keyType, createdAt: now, firstUsed: null, expiresAt: now + KEY_DURATIONS[keyType] };
+    const keyData = { key, hwid, keyType, createdAt: now, expiresAt: now + KEY_DURATIONS[keyType] };
 
     setTimeout(() => {
         if (!keyData.firstUsed) {
-            keys.set(hwid, keys.get(hwid).filter(k => k.key !== key));
+            keys.set(hwid, (keys.get(hwid) || []).filter(k => k.key !== key));
         }
     }, UNUSED_EXPIRY);
 
@@ -65,7 +61,7 @@ app.post('/generate-key', (req, res) => {
     res.json({ key, expiresIn: KEY_DURATIONS[keyType] });
 });
 
-// Validate key (requires HWID)
+// Validate key
 app.post('/validate-key', (req, res) => {
     const { key, hwid } = req.body;
 
