@@ -35,7 +35,7 @@ app.post('/generate-key', (req, res) => {
         return res.status(400).json({ error: 'HWID and key type required' });
     }
 
-    if (!KEY_DURATIONS[keyType] && keyType !== "permanent") {
+    if (!(keyType in KEY_DURATIONS) && keyType !== "permanent") {
         return res.status(400).json({ error: 'Invalid key type' });
     }
 
@@ -109,7 +109,7 @@ app.post('/admin/generate-key', (req, res) => {
         return res.status(400).json({ error: 'HWID and key type required' });
     }
 
-    if (!KEY_DURATIONS[keyType] && keyType !== "permanent") {
+    if (!(keyType in KEY_DURATIONS) && keyType !== "permanent") {
         return res.status(400).json({ error: 'Invalid key type' });
     }
 
