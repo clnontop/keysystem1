@@ -91,18 +91,24 @@
     <p id="key"></p>
 
     <script>
-        // Function to check if the user came from Linkvertise
+        // Function to check for the URL parameter (ref)
         function checkReferrer() {
-            const referrer = document.referrer;
+            // Log the full URL for debugging
+            console.log("Current URL:", window.location.href);
 
-            // Allow access only if the referrer is Linkvertise
-            if (referrer.includes("direct-link.net/1333803/infernox-key-system")) {
+            // Get the URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const ref = urlParams.get('ref');  // Get the 'ref' parameter from the URL
+            console.log("Ref parameter:", ref);  // Log the 'ref' parameter
+
+            // If the 'ref' parameter is 'valid', enable access
+            if (ref === 'valid') {
                 document.getElementById('hwidInput').disabled = false;
                 document.getElementById('getKeyButton').disabled = false;
             } else {
-                // Redirect to the InfernoX page if they didn't come from Linkvertise
+                // Redirect to the InfernoX page if the ref parameter is missing or invalid
                 alert("You must complete the Linkvertise process to access the key system.");
-                window.location.href = "https://infernox.netlify.app/";
+                window.location.href = "https://infernox.netlify.app/"; // Redirect to "No Access" page
             }
         }
 
