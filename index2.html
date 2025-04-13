@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Secure Page</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f4;
+      color: #333;
+      text-align: center;
+      padding: 50px;
+    }
+
+    h1 {
+      font-size: 2.5em;
+      margin-bottom: 20px;
+    }
+
+    .message {
+      font-size: 1.2em;
+      color: #444;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Welcome to the Secure Page!</h1>
+  <p class="message">You have successfully accessed this page.</p>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const allowedReferrer = "https://your-allowed-url.com"; // Replace with the valid referrer URL
+
+        if (document.referrer !== allowedReferrer) {
+            // Redirect if the referrer is not valid
+            window.location.href = "https://google.com"; // Redirect to another page (could be a "permission denied" page)
+        }
+    });
+  </script>
+
+</body>
+</html>

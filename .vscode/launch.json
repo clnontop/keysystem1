@@ -1,0 +1,15 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "edge",
+            "request": "launch",
+            "name": "Open index.html in Microsoft Edge",
+            "file": "c:\\Users\\CLN\\Desktop\\infernoX-key-system\\index.html",
+            "runtimeExecutable": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+            "runtimeArgs": [
+                "--new-window"
+            ]
+        }
+    ]
+}

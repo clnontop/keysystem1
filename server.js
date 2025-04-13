@@ -101,6 +101,54 @@ app.use((err, req, res, next) => {
     next();
 });
 
+// Route to delete all keys for a given HWID
+app.post('/admin/delete-by-hwid', (req, res) => {
+    const { hwid } = req.body;
+
+    if (!hwid) {
+        return res.status(400).json({ success: false, message: 'HWID required' });
+    }
+
+    // Example if you're storing keys in a JS object like { key123: { hwid, expiresAt }, ... }
+    let deletedKeys = [];
+
+    for (const key in keyStore) {
+        if (keyStore[key].hwid === hwid) {
+            delete keyStore[key];
+            deletedKeys.push(key);
+        }
+    }
+
+    if (deletedKeys.length > 0) {
+        return res.json({ success: true, message: `Deleted keys: ${deletedKeys.join(', ')}` });
+    } else {
+        return res.json({ success: false, message: 'No keys found for that HWID' });
+    }
+});
+
+
+// Example route in your Express backend
+app.post('/admin/expire-key', (req, res) => {
+    const { key, hwid } = req.body;
+
+    // Example: assuming keys are stored in a Map or DB
+    const keyData = keyStore[key];
+    if (!keyData) {
+        return res.json({ success: false, message: 'Key not found.' });
+    }
+
+    // Check if HWID matches
+    if (keyData.hwid !== hwid) {
+        return res.json({ success: false, message: 'HWID does not match.' });
+    }
+
+    // Delete or expire it
+    delete keyStore[key]; // or set keyData.expiry = Date.now() - 1;
+
+    return res.json({ success: true, message: 'Key expired.' });
+});
+
+
 app.post('/admin/generate-key', (req, res) => {
     console.log("🔥 Incoming /admin/generate-key request");
     console.log("Headers:", req.headers);
