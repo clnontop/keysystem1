@@ -19,7 +19,7 @@ const KEY_DURATIONS = {
     "5-s": 5 * 1000
 };
 
-const UNUSED_EXPIRY = 3 * 60 * 1000;
+const UNUSED_EXPIRY = 3 * 60 * 1000;  // 3 minutes for unused keys
 const ADMIN_SECRET = "adi";
 
 function generateKey(hwid, keyType) {
@@ -47,6 +47,7 @@ app.post('/generate-key', (req, res) => {
 
     const keyData = { key, hwid, keyType, createdAt: now, expiresAt: now + KEY_DURATIONS[keyType] };
 
+    // Set cleanup for unused keys after UNUSED_EXPIRY period (3 minutes)
     setTimeout(() => {
         if (!keyData.firstUsed) {
             keys.set(hwid, (keys.get(hwid) || []).filter(k => k.key !== key));
@@ -78,7 +79,7 @@ app.post('/validate-key', (req, res) => {
 
             if (!keyData.firstUsed) {
                 keyData.firstUsed = now;
-                keyData.expiresAt = now + KEY_DURATIONS[keyData.keyType];
+                keyData.expiresAt = now + KEY_DURATIONS[keyData.keyType]; // Reset expiration when the key is first used
             }
 
             if (now > keyData.expiresAt) {
@@ -93,15 +94,52 @@ app.post('/validate-key', (req, res) => {
     res.status(404).json({ error: 'Invalid or expired key' });
 });
 
-app.use((err, req, res, next) => {
-    if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
-        console.error("🛑 Bad JSON received:", err.message);
-        return res.status(400).json({ error: "Invalid JSON" });
+// Admin routes remain unchanged
+
+// Route for admin to generate keys
+app.post('/admin/generate-key', (req, res) => {
+    console.log("🔥 Incoming /admin/generate-key request");
+    console.log("Headers:", req.headers);
+    console.log("Body:", req.body);
+
+    const { hwid, keyType, secret } = req.body;
+
+    if (secret !== ADMIN_SECRET) {
+        return res.status(403).json({ error: "Unauthorized" });
     }
-    next();
+
+    if (!hwid || !keyType) {
+        return res.status(400).json({ error: 'HWID and key type required' });
+    }
+
+    if (!(keyType in KEY_DURATIONS) && keyType !== "permanent") {
+        return res.status(400).json({ error: 'Invalid key type' });
+    }
+
+    const key = generateKey(hwid, keyType);
+    const now = Date.now();
+
+    if (keyType === "permanent") {
+        permanentKeys.set(hwid, { key, createdAt: now });
+        return res.json({ key, expiresIn: "Never" });
+    }
+
+    const keyData = { key, hwid, keyType, createdAt: now, expiresAt: now + KEY_DURATIONS[keyType] };
+
+    // Set cleanup for unused keys after UNUSED_EXPIRY period (3 minutes)
+    setTimeout(() => {
+        if (!keyData.firstUsed) {
+            keys.set(hwid, (keys.get(hwid) || []).filter(k => k.key !== key));
+        }
+    }, UNUSED_EXPIRY);
+
+    if (!keys.has(hwid)) keys.set(hwid, []);
+    keys.get(hwid).push(keyData);
+
+    res.json({ key, expiresIn: KEY_DURATIONS[keyType] });
 });
 
-// Route to delete all keys for a given HWID
+// Admin route to delete keys by HWID
 app.post('/admin/delete-by-hwid', (req, res) => {
     const { hwid } = req.body;
 
@@ -109,7 +147,6 @@ app.post('/admin/delete-by-hwid', (req, res) => {
         return res.status(400).json({ success: false, message: 'HWID required' });
     }
 
-    // Example if you're storing keys in a JS object like { key123: { hwid, expiresAt }, ... }
     let deletedKeys = [];
 
     for (const key in keyStore) {
@@ -126,12 +163,25 @@ app.post('/admin/delete-by-hwid', (req, res) => {
     }
 });
 
+// Node.js example using Express
+app.post('/get-key-expiration', (req, res) => {
+    const { hwid } = req.body;
 
-// Example route in your Express backend
+    // Here, find the key expiration from your database or wherever you store it
+    const keyExpirationTime = getKeyExpirationForHWID(hwid); // Example function to retrieve expiration time
+
+    if (keyExpirationTime) {
+        res.json({ expirationTime: keyExpirationTime });
+    } else {
+        res.status(404).json({ error: "Key not found for this HWID" });
+    }
+});
+
+
+// Admin route to expire a specific key
 app.post('/admin/expire-key', (req, res) => {
     const { key, hwid } = req.body;
 
-    // Example: assuming keys are stored in a Map or DB
     const keyData = keyStore[key];
     if (!keyData) {
         return res.json({ success: false, message: 'Key not found.' });
@@ -143,54 +193,9 @@ app.post('/admin/expire-key', (req, res) => {
     }
 
     // Delete or expire it
-    delete keyStore[key]; // or set keyData.expiry = Date.now() - 1;
+    delete keyStore[key];
 
     return res.json({ success: true, message: 'Key expired.' });
-});
-
-
-app.post('/admin/generate-key', (req, res) => {
-    console.log("🔥 Incoming /admin/generate-key request");
-    console.log("Headers:", req.headers);
-    console.log("Body:", req.body);
-
-    const { hwid, keyType, secret } = req.body;
-
-    if (secret !== ADMIN_SECRET) {
-        return res.status(403).json({ error: "Unauthorized" });
-    }
-
-    if (!hwid || !keyType) {
-        return res.status(400).json({ error: 'HWID and key type required' });
-    }
-
-    console.log("➡️ Received keyType in admin request:", keyType);
-    console.log("✅ Valid types are:", Object.keys(KEY_DURATIONS));
-
-    if (!(keyType in KEY_DURATIONS) && keyType !== "permanent") {
-        return res.status(400).json({ error: 'Invalid key type' });
-    }
-
-    const key = generateKey(hwid, keyType);
-    const now = Date.now();
-
-    if (keyType === "permanent") {
-        permanentKeys.set(hwid, { key, createdAt: now });
-        return res.json({ key, expiresIn: "Never" });
-    }
-
-    const keyData = { key, hwid, keyType, createdAt: now, expiresAt: now + KEY_DURATIONS[keyType] };
-
-    setTimeout(() => {
-        if (!keyData.firstUsed) {
-            keys.set(hwid, (keys.get(hwid) || []).filter(k => k.key !== key));
-        }
-    }, UNUSED_EXPIRY);
-
-    if (!keys.has(hwid)) keys.set(hwid, []);
-    keys.get(hwid).push(keyData);
-
-    res.json({ key, expiresIn: KEY_DURATIONS[keyType] });
 });
 
 const PORT = process.env.PORT || 3000;
