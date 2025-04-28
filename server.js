@@ -1,10 +1,14 @@
 const express = require('express');
 const crypto = require('crypto');
 const cors = require('cors');
+const path = require('path');  // Required for serving static files
 
 const app = express();
 app.use(express.json());
 app.use(cors());
+
+// Serve static files (HTML, CSS, JS) from the "public" folder
+app.use(express.static(path.join(__dirname, 'public')));
 
 const keys = new Map();
 const permanentKeys = new Map();
@@ -70,7 +74,6 @@ app.post('/validate-token', (req, res) => {
 });
 
 // ========== EXISTING KEY SYSTEM CODE BELOW ==========
-// (your /generate-key, /validate-key, admin routes, etc.)
 
 app.post('/generate-key', (req, res) => {
     const { hwid, keyType } = req.body;
@@ -140,7 +143,22 @@ app.post('/validate-key', (req, res) => {
     res.status(404).json({ error: 'Invalid or expired key' });
 });
 
-// Rest of your admin routes like /admin/generate-key, etc...
+// ========== ROUTES TO HANDLE 400.html AND 200.html ==========
+
+// Serve 400.html when invalid or expired token is encountered
+app.get('/400.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', '400.html'));
+});
+
+// Serve 200.html for successful cases or redirection
+app.get('/200.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', '200.html'));
+});
+
+// Serve the rest of the static files (if any)
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));  // Default page or entry point
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Key system running on port ${PORT}`));
