@@ -1,18 +1,13 @@
 const express = require('express');
 const crypto = require('crypto');
 const cors = require('cors');
-const path = require('path');  // Required for serving static files
 
 const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Serve static files (HTML, CSS, JS) from the "public" folder
-app.use(express.static(path.join(__dirname, 'public')));
-
 const keys = new Map();
 const permanentKeys = new Map();
-const tokens = new Map(); // <- NEW: Tokens Map
 
 const KEY_DURATIONS = {
     "1-w": 7 * 24 * 60 * 60 * 1000,
@@ -25,55 +20,11 @@ const KEY_DURATIONS = {
 };
 
 const UNUSED_EXPIRY = 3 * 60 * 1000;
-const TOKEN_EXPIRY = 5 * 60 * 1000; // 🔥 Token lifetime = 5 minutes
 const ADMIN_SECRET = "adi";
 
 function generateKey(hwid, keyType) {
     return `INF-${keyType.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()}-${hwid.slice(0, 6)}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
 }
-
-function generateToken() {
-    return crypto.randomBytes(16).toString('hex');
-}
-
-// TOKEN ROUTES
-app.post('/generate-token', (req, res) => {
-    const token = generateToken();
-    const expiresAt = Date.now() + TOKEN_EXPIRY;
-
-    tokens.set(token, { expiresAt });
-
-    // Auto-delete after expiry
-    setTimeout(() => {
-        tokens.delete(token);
-    }, TOKEN_EXPIRY);
-
-    res.json({ token, expiresIn: TOKEN_EXPIRY });
-});
-
-app.post('/validate-token', (req, res) => {
-    const { token } = req.body;
-
-    if (!token) {
-        return res.status(400).json({ error: 'Token required' });
-    }
-
-    const tokenData = tokens.get(token);
-
-    if (!tokenData) {
-        return res.status(404).json({ error: 'Invalid or expired token' });
-    }
-
-    const now = Date.now();
-    if (now > tokenData.expiresAt) {
-        tokens.delete(token);
-        return res.status(400).json({ error: 'Token expired' });
-    }
-
-    res.json({ success: true, expiresIn: tokenData.expiresAt - now });
-});
-
-// ========== EXISTING KEY SYSTEM CODE BELOW ==========
 
 app.post('/generate-key', (req, res) => {
     const { hwid, keyType } = req.body;
@@ -96,7 +47,6 @@ app.post('/generate-key', (req, res) => {
 
     const keyData = { key, hwid, keyType, createdAt: now, expiresAt: now + KEY_DURATIONS[keyType] };
 
-    // Set cleanup for unused keys after UNUSED_EXPIRY period (3 minutes)
     setTimeout(() => {
         if (!keyData.firstUsed) {
             keys.set(hwid, (keys.get(hwid) || []).filter(k => k.key !== key));
@@ -143,21 +93,41 @@ app.post('/validate-key', (req, res) => {
     res.status(404).json({ error: 'Invalid or expired key' });
 });
 
-// ========== ROUTES TO HANDLE 400.html AND 200.html ==========
+app.post('/admin/generate-key', (req, res) => {
+    const { hwid, keyType, secret } = req.body;
 
-// Serve 400.html when invalid or expired token is encountered
-app.get('/400.html', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', '400.html'));
-});
+    if (secret !== ADMIN_SECRET) {
+        return res.status(403).json({ error: "Unauthorized" });
+    }
 
-// Serve 200.html for successful cases or redirection
-app.get('/200.html', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', '200.html'));
-});
+    if (!hwid || !keyType) {
+        return res.status(400).json({ error: 'HWID and key type required' });
+    }
 
-// Serve the rest of the static files (if any)
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));  // Default page or entry point
+    if (!(keyType in KEY_DURATIONS) && keyType !== "permanent") {
+        return res.status(400).json({ error: 'Invalid key type' });
+    }
+
+    const key = generateKey(hwid, keyType);
+    const now = Date.now();
+
+    if (keyType === "permanent") {
+        permanentKeys.set(hwid, { key, createdAt: now });
+        return res.json({ key, expiresIn: "Never" });
+    }
+
+    const keyData = { key, hwid, keyType, createdAt: now, expiresAt: now + KEY_DURATIONS[keyType] };
+
+    setTimeout(() => {
+        if (!keyData.firstUsed) {
+            keys.set(hwid, (keys.get(hwid) || []).filter(k => k.key !== key));
+        }
+    }, UNUSED_EXPIRY);
+
+    if (!keys.has(hwid)) keys.set(hwid, []);
+    keys.get(hwid).push(keyData);
+
+    res.json({ key, expiresIn: KEY_DURATIONS[keyType] });
 });
 
 const PORT = process.env.PORT || 3000;
